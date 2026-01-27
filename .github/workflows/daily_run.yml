@@ -1,0 +1,42 @@
+name: Daily Starlink Report
+
+on:
+  schedule:
+    # 每天 UTC 时间 00:00 运行 (相当于北京时间早上 08:00)
+    - cron: '0 0 * * *'
+  workflow_dispatch: # 允许手动点击按钮触发测试
+
+permissions:
+  contents: write # 赋予脚本写入仓库的权限
+
+jobs:
+  build-and-report:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.10'
+
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+
+    - name: Run analysis script
+      env:
+        GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+      run: python main.py
+
+    - name: Commit and Push changes
+      run: |
+        git config --global user.name 'github-actions[bot]'
+        git config --global user.email 'github-actions[bot]@users.noreply.github.com'
+        git add reports/ README.md
+        # 如果没有变化（例如没有新闻），git commit 可能会报错，所以加个 || true
+        git commit -m "Auto-update: Starlink Daily Report" || echo "No changes to commit"
+        git push
