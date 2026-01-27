@@ -10,7 +10,7 @@ if not API_KEY:
     raise ValueError("未找到 GEMINI_API_KEY")
 
 genai.configure(api_key=API_KEY)
-model = genai.GenerativeModel('gemini-pro') # 或者使用 gemini-pro
+model = genai.GenerativeModel('gemini-2.0-flash') # 或者使用 gemini-pro
 
 def get_starlink_news():
     """搜索 Starlink 最新新闻"""
@@ -90,5 +90,6 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
 
