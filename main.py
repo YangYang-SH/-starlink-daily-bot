@@ -13,17 +13,42 @@ genai.configure(api_key=API_KEY)
 model = genai.GenerativeModel('gemini-2.0-flash') # 或者使用 gemini-pro
 
 def get_starlink_news():
-    """搜索 Starlink 最新新闻"""
+    """搜索 Starlink 最新新闻 (优化版：精简 Token 占用)"""
     print("正在搜索 Starlink 最新资讯...")
     results = []
-    # 使用 DuckDuckGo 搜索过去24小时的新闻
+    
     with DDGS() as ddgs:
-        # keywords: 搜索关键词, region: 地区, safesearch: 安全搜索, timelimit: 时间限制(d=day)
         keywords = "SpaceX Starlink news latest technology"
-        news_gen = ddgs.news(keywords, region="wt-wt", safesearch="off", timelimit="d", max_results=10)
+        # 修改点 1: 将 max_results 从 10 减少到 5，大幅降低 Token 消耗
+        news_gen = ddgs.news(keywords, region="wt-wt", safesearch="off", timelimit="d", max_results=5)
+        
         for r in news_gen:
-            results.append(r)
-    return results
+            # 修改点 2: 只提取 'title', 'date', 'body' 关键字段
+            # 原始结果包含 url, image, source_url 等大量非必要 Token
+            title = r.get('title', 'No Title')
+            date = r.get('date', '')
+            body = r.get('body', '') # 新闻摘要
+            
+            # 修改点 3: 强制截断摘要长度
+            # 如果摘要超过 150 个字符，只取前 150 个，后面加省略号
+            if len(body) > 150:
+                body = body[:150] + "..."
+            
+            # 修改点 4: 格式化为纯文本字符串，而不是字典
+            # 去掉 JSON 的大括号 {} 和引号 ""，这是最节省 Token 的格式
+            clean_item = f"Date: {date}\nTitle: {title}\nSummary: {body}"
+            
+            results.append(clean_item)
+    
+    # 修改点 5: 将列表合并为一个长字符串返回
+    # 这样调用 API 时直接把这个字符串传进去即可
+    final_text = "\n---\n".join(results)
+    
+    # (可选) 修改点 6: 双重保险，确保总长度不超过限制（例如 2000 字符）
+    if len(final_text) > 3000:
+        final_text = final_text[:3000] + "\n...(内容已截断)"
+        
+    return final_text
 
 def generate_report(news_items):
     """使用 Gemini 分析并生成报告"""
@@ -90,6 +115,7 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
 
 
