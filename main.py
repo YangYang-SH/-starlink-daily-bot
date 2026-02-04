@@ -13,7 +13,7 @@ if not API_KEY:
     print("警告: 未找到 GEMINI_API_KEY，后续生成步骤将失败")
 
 # 建议：模型名称提取为常量，方便修改
-MODEL_NAME = 'gemini-1.5-flash'  # 如果你确实有 2.0 权限，改回 'gemini-2.0-flash'
+MODEL_NAME = 'gemini-2.0-flash'  
 
 def get_starlink_news():
     """搜索 Starlink 最新新闻 (优化版)"""
@@ -133,3 +133,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+
