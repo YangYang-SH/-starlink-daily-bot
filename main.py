@@ -57,7 +57,7 @@ def get_starlink_news():
     return final_text
 
 def generate_report(news_text):
-    """生成分析报告 (包含重试机制)"""
+    """生成分析报告 (包含重试机制及Token统计)"""
     if not API_KEY:
         return "错误：未配置 API Key，无法生成报告。"
 
@@ -79,7 +79,7 @@ def generate_report(news_text):
 {news_text}
 """
 
-    # 配置 API (只需配置一次，建议放在循环外)
+    # 配置 API
     try:
         genai.configure(api_key=API_KEY)
         model = genai.GenerativeModel(MODEL_NAME)
@@ -88,12 +88,27 @@ def generate_report(news_text):
 
     # --- 重试逻辑开始 ---
     max_retries = 3
-    base_delay = 100  # 基础等待 100 秒
+    base_delay = 1000  # 基础等待 100 秒
     
     for attempt in range(max_retries):
         try:
+            # 调用生成接口
             response = model.generate_content(prompt)
-            return response.text
+            
+            # --- 新增代码：获取并格式化 Token 统计 ---
+            input_tokens = "未知"
+            # 检查 usage_metadata 是否存在 (部分旧版SDK或出错时可能没有)
+            if hasattr(response, 'usage_metadata'):
+                # prompt_token_count 即为输入 token 数
+                input_tokens = response.usage_metadata.prompt_token_count
+                print(f"本次生成消耗输入 Token: {input_tokens}")
+            
+            report_content = response.text
+            
+            # 将 Token 信息追加到 Markdown 报告末尾
+            footer = f"\n\n---\n*API 统计: 输入 Token 数: {input_tokens}*"
+            return report_content + footer
+            # -------------------------------------
             
         except Exception as e:
             error_str = str(e)
@@ -128,7 +143,7 @@ def save_report(content):
     
     print(f"报告已保存至 {filename}")
     
-    # 更新 README (此处保持你的逻辑，即覆盖模式)
+    # 更新 README
     try:
         with open("README.md", "w", encoding="utf-8") as f:
             f.write(f"# Starlink 每日追踪\n\n最新更新时间: {today}\n\n{content}")
@@ -140,7 +155,6 @@ def main():
         news = get_starlink_news()
         if not news:
             print("未找到相关新闻，跳过生成。")
-            # 即使没新闻，也可以选择生成一个'今日无新闻'的报告
             return
             
         report = generate_report(news)
@@ -148,7 +162,6 @@ def main():
         
     except Exception as e:
         print(f"主程序发生严重错误: {e}")
-        # 在 GitHub Actions 等环境中，exit(1) 可以让 Workflow 显示失败
         exit(1)
 
 if __name__ == "__main__":
