@@ -57,13 +57,13 @@ def get_starlink_news():
     return final_text
 
 def generate_report(news_text):
-    """生成分析报告"""
+    """生成分析报告 (包含重试机制)"""
     if not API_KEY:
         return "错误：未配置 API Key，无法生成报告。"
 
     print("正在调用 Gemini 进行分析...")
     
-    if not news_text or len(news_text) < 10: # 放宽一点长度限制
+    if not news_text or len(news_text) < 10:
         return "未搜索到相关 Starlink 新闻。"
 
     prompt = f"""
@@ -79,21 +79,41 @@ def generate_report(news_text):
 {news_text}
 """
 
+    # 配置 API (只需配置一次，建议放在循环外)
     try:
-        # 将配置和初始化放在这里，捕获可能的配置错误
         genai.configure(api_key=API_KEY)
         model = genai.GenerativeModel(MODEL_NAME)
-        
-        response = model.generate_content(prompt)
-        return response.text
-        
     except Exception as e:
-        print(f"Gemini API 调用错误: {e}")
-        if "404" in str(e):
-             return f"错误：模型 {MODEL_NAME} 未找到，请检查模型名称是否正确。"
-        if "429" in str(e):
-            return "错误：API 调用过于频繁 (429)，请稍后再试。"
-        return f"生成报告时发生错误: {e}"
+        return f"配置 Gemini 失败: {e}"
+
+    # --- 重试逻辑开始 ---
+    max_retries = 3
+    base_delay = 100  # 基础等待 100 秒
+    
+    for attempt in range(max_retries):
+        try:
+            response = model.generate_content(prompt)
+            return response.text
+            
+        except Exception as e:
+            error_str = str(e)
+            # 检查是否为 429 (Resource Exhausted) 或 503 (Service Unavailable)
+            if "429" in error_str or "503" in error_str:
+                if attempt < max_retries - 1:
+                    wait_time = base_delay * (2 ** attempt) # 指数退避: 100s, 200s, 400s
+                    print(f"API 繁忙 (429/503)，{wait_time} 秒后进行第 {attempt + 2} 次重试...")
+                    time.sleep(wait_time)
+                    continue
+                else:
+                    return "错误：API 调用过于频繁，重试多次后仍然失败。请检查配额或稍后再试。"
+            elif "404" in error_str:
+                 return f"错误：模型 {MODEL_NAME} 未找到，请检查模型名称是否正确。"
+            else:
+                # 其他错误直接返回，不重试
+                return f"生成报告时发生错误: {e}"
+    # --- 重试逻辑结束 ---
+    
+    return "未知错误。"
 
 def save_report(content):
     """保存报告"""
@@ -133,4 +153,5 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
