@@ -3,11 +3,11 @@
 import os
 import time
 import datetime
-import smtplib # 新增：用于发送邮件
-from email.mime.text import MIMEText # 新增：构建邮件内容
-from email.header import Header # 新增：构建邮件头
+import smtplib
+from email.mime.text import MIMEText
+from email.header import Header
+import markdown
 import google.generativeai as genai
-from google.api_core import exceptions as google_exceptions
 from duckduckgo_search import DDGS
 
 # ================= 配置区域 =================
@@ -16,14 +16,13 @@ from duckduckgo_search import DDGS
 API_KEY = os.getenv("GEMINI_API_KEY")
 
 # 邮件配置
-MAIL_HOST = "smtp.163.com"       # 163 邮箱 SMTP 服务器
-MAIL_USER = "zhangjiang201612@163.com" # 发件人邮箱
-# MAIL_PASS = "你的163授权码"      
-MAIL_PASS = os.getenv("MAIL_PASSWORD") # <--- 【重要】这里填你的 163 授权码，不是登录密码！
-RECEIVERS = ["pan.yangpan@huawei.com","songjunlin@huawei.com"] # 收件人列表
+MAIL_HOST = "smtp.163.com"
+MAIL_USER = "zhangjiang201612@163.com"
+MAIL_PASS = os.getenv("MAIL_PASSWORD") # 163 授权码
+RECEIVERS = ["pan.yangpan@huawei.com", "songjunlin@huawei.com"]
 
 # 模型配置
-MODEL_NAME = 'gemini-2.5-flash' 
+MODEL_NAME = 'gemini-2.5-flash'
 
 # ===========================================
 
@@ -42,7 +41,7 @@ def get_starlink_news():
                 for r in news_gen:
                     title = r.get('title', 'No Title')
                     date = r.get('date', '')
-                    body = r.get('body', r.get('snippet', '')) 
+                    body = r.get('body', r.get('snippet', ''))
                     link = r.get('url', r.get('link', ''))
                     
                     if len(body) > 150:
@@ -52,7 +51,7 @@ def get_starlink_news():
                     results.append(clean_item)
 
             if results:
-                break 
+                break
         except Exception as e:
             print(f"DuckDuckGo 搜索尝试 {attempt + 1}/{max_retries} 失败: {e}")
             time.sleep(2)
@@ -75,15 +74,15 @@ def generate_report(news_text):
     if not news_text or len(news_text) < 10:
         return "未搜索到相关 Starlink 新闻。"
 
+    # 提示词保持 Markdown 格式要求，因为 markdown 库处理这个最方便
     prompt = f"""
 请扮演一位专业的科技新闻分析师。基于以下关于 Starlink (星链) 的最新新闻资讯，用中文写一份简短的日报。
 
 要求：
 1. 提炼 5 个最重要的核心动态。
 2. 语气专业、简洁。
-3. 如果内容包含技术突破或发射任务，请重点标注。
+3. 使用 Markdown 格式（使用 **加粗** 重点，使用 - 列表）。
 4. **必须在每条动态的结尾，附上对应的原始链接（格式为 Markdown：[点击查看原文](URL)）。**
-5. 输出格式为 Markdown。
 
 --- 新闻内容 ---
 {news_text}
@@ -95,14 +94,6 @@ def generate_report(news_text):
     except Exception as e:
         return f"配置 Gemini 失败: {e}"
 
-    # 预计算 Token (可选)
-    input_token_count = "未知"
-    try:
-        count_result = model.count_tokens(prompt)
-        input_token_count = count_result.total_tokens
-    except:
-        pass
-
     max_retries = 3
     base_delay = 2
     
@@ -111,13 +102,16 @@ def generate_report(news_text):
             print(f"尝试第 {attempt + 1}/{max_retries} 次调用生成 API...")
             response = model.generate_content(prompt)
             
+            # 获取 Token 统计
+            input_tokens = "未知"
             output_tokens = "未知"
             if hasattr(response, 'usage_metadata'):
-                input_token_count = response.usage_metadata.prompt_token_count
+                input_tokens = response.usage_metadata.prompt_token_count
                 output_tokens = response.usage_metadata.candidates_token_count
             
             report_content = response.text
-            footer = f"\n\n---\n*API 统计: 输入 Token: {input_token_count} | 输出 Token: {output_tokens}*"
+            # 添加 Markdown 格式的页脚
+            footer = f"\n\n---\n> *API 统计: 输入 Token: {input_tokens} | 输出 Token: {output_tokens}*"
             return report_content + footer
             
         except Exception as e:
@@ -144,35 +138,85 @@ def save_report(content):
     print(f"报告已保存至 {filename}")
 
 def send_email(content):
-    """发送邮件功能"""
+    """发送邮件功能 (HTML 版)"""
     print("正在准备发送邮件...")
     
     if not content or "错误" in content[:20]:
         print("报告内容为空或包含错误，跳过发送。")
         return
 
-    # 1. 构造邮件对象
+    # 1. 将 Markdown 转换为 HTML
+    try:
+        # 扩展 markdown 转换能力，支持表格和围栏代码块等
+        html_body = markdown.markdown(content, extensions=['tables', 'fenced_code'])
+    except Exception as e:
+        print(f"Markdown 转换失败，降级发送纯文本: {e}")
+        html_body = f"<pre>{content}</pre>"
+
+    # 2. 构建美化的 HTML 模板 (CSS 样式)
+    # 这里的 CSS 使得邮件在 Outlook, Gmail, 手机端看起来都比较舒服
+    html_content = f"""
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <meta charset="utf-8">
+        <style>
+            body {{
+                font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+                line-height: 1.6;
+                color: #333;
+                max-width: 800px;
+                margin: 0 auto;
+                padding: 20px;
+            }}
+            h1, h2, h3 {{ color: #2c3e50; border-bottom: 2px solid #eaeaea; padding-bottom: 10px; }}
+            a {{ color: #0066cc; text-decoration: none; font-weight: bold; }}
+            a:hover {{ text-decoration: underline; }}
+            ul {{ padding-left: 20px; }}
+            li {{ margin-bottom: 10px; }}
+            strong {{ color: #d35400; }}
+            blockquote {{
+                background: #f9f9f9;
+                border-left: 5px solid #ccc;
+                margin: 1.5em 10px;
+                padding: 0.5em 10px;
+                color: #555;
+            }}
+            .footer {{
+                margin-top: 30px;
+                padding-top: 10px;
+                border-top: 1px solid #eee;
+                font-size: 12px;
+                color: #999;
+                text-align: center;
+            }}
+        </style>
+    </head>
+    <body>
+        <div class="content">
+            {html_body}
+        </div>
+        <div class="footer">
+            Generated by Gemini 2.5 Flash | 自动发送邮件系统
+        </div>
+    </body>
+    </html>
+    """
+
     today = datetime.date.today().isoformat()
     subject = f"Starlink 每日简报 - {today}"
     
-    # 使用 MIMEText 构造邮件内容，utf-8 编码
-    message = MIMEText(content, 'plain', 'utf-8')
+    # 3. 构造 MIMEText 对象，注意第二个参数改为 'html'
+    message = MIMEText(html_content, 'html', 'utf-8')
     message['From'] = Header(MAIL_USER, 'utf-8')
-    message['To'] =  Header(",".join(RECEIVERS), 'utf-8') # 邮件头显示所有收件人
+    message['To'] = Header(",".join(RECEIVERS), 'utf-8')
     message['Subject'] = Header(subject, 'utf-8')
 
     try:
-        # 2. 连接 SMTP 服务器 (163 使用 SSL 端口 465)
         smtp_obj = smtplib.SMTP_SSL(MAIL_HOST, 465) 
-        
-        # 3. 登录
         smtp_obj.login(MAIL_USER, MAIL_PASS)
-        
-        # 4. 发送邮件
         smtp_obj.sendmail(MAIL_USER, RECEIVERS, message.as_string())
-        print(f"邮件已成功发送至: {RECEIVERS}")
-        
-        # 5. 退出
+        print(f"HTML 邮件已成功发送至: {RECEIVERS}")
         smtp_obj.quit()
         
     except smtplib.SMTPException as e:
@@ -188,10 +232,10 @@ def main():
     report = generate_report(news)
     
     if report:
-        # 3. 本地保存
+        # 3. 本地保存 (依然保存 Markdown 源码，方便存档)
         save_report(report)
         
-        # 4. 发送邮件 (新增)
+        # 4. 发送邮件 (发送渲染后的 HTML)
         send_email(report)
         
         print("流程结束。")
@@ -200,6 +244,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
-
-
