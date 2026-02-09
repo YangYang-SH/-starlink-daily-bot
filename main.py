@@ -4,35 +4,32 @@ import os
 import time
 import datetime
 import google.generativeai as genai
+from google.api_core import exceptions as google_exceptions
 from duckduckgo_search import DDGS
 
 # 配置 Gemini API
 API_KEY = os.getenv("GEMINI_API_KEY")
-if not API_KEY:
-    # 建议：在这里不直接抛出异常，允许在 CI/CD 中通过打印日志排查
-    print("警告: 未找到 GEMINI_API_KEY，后续生成步骤将失败")
 
-# 建议：模型名称提取为常量，方便修改
-MODEL_NAME = 'gemini-2.0-flash'  
+# 建议：优先使用稳定版模型，如果报错再尝试 2.0
+MODEL_NAME = 'gemini-2.0-flash' 
+# MODEL_NAME = 'gemini-1.5-flash'
 
 def get_starlink_news():
-    """搜索 Starlink 最新新闻 (优化版)"""
+    """搜索 Starlink 最新新闻"""
     print("正在搜索 Starlink 最新资讯...")
     results = []
-    
-    # 增加简单的重试机制，应对 DDGS 的网络抖动
     max_retries = 3
+    
     for attempt in range(max_retries):
         try:
             with DDGS() as ddgs:
                 keywords = "SpaceX Starlink news latest technology"
-                # 注意：ddgs.news 的参数随版本变化较大，保持关注
+                # timelimit='d' 表示过去一天，确保新闻新鲜
                 news_gen = ddgs.news(keywords, region="wt-wt", safesearch="off", timelimit="d", max_results=5)
                 
                 for r in news_gen:
                     title = r.get('title', 'No Title')
                     date = r.get('date', '')
-                    # 兼容不同版本的字段名 (body 或 snippet)
                     body = r.get('body', r.get('snippet', '')) 
                     
                     if len(body) > 150:
@@ -40,131 +37,110 @@ def get_starlink_news():
                     
                     clean_item = f"Date: {date}\nTitle: {title}\nSummary: {body}"
                     results.append(clean_item)
-            break # 成功则跳出循环
+            if results: # 只有找到结果才跳出
+                break 
         except Exception as e:
-            print(f"搜索尝试 {attempt + 1}/{max_retries} 失败: {e}")
-            time.sleep(2) # 等待 2 秒后重试
+            print(f"DuckDuckGo 搜索尝试 {attempt + 1}/{max_retries} 失败: {e}")
+            time.sleep(2)
 
     if not results:
         return ""
 
     final_text = "\n---\n".join(results)
-    
-    # 双重保险
     if len(final_text) > 3000:
         final_text = final_text[:3000] + "\n...(内容已截断)"
-        
     return final_text
 
 def generate_report(news_text):
-    """生成分析报告 (包含重试机制及Token统计)"""
+    """生成分析报告 (修复重试逻辑版)"""
     if not API_KEY:
-        return "错误：未配置 API Key，无法生成报告。"
+        print("错误：未找到 API Key")
+        return None
 
-    print("正在调用 Gemini 进行分析...")
+    print(f"正在调用 Gemini ({MODEL_NAME}) 进行分析...")
     
     if not news_text or len(news_text) < 10:
-        return "未搜索到相关 Starlink 新闻。"
+        return "未搜索到相关 Starlink 新闻，跳过分析。"
 
     prompt = f"""
-请扮演一位专业的科技新闻分析师。基于以下关于 Starlink (星链) 的最新新闻资讯，用中文写一份简短的日报。
+    请扮演一位专业的科技新闻分析师。基于以下关于 Starlink (星链) 的最新新闻资讯，用中文写一份简短的日报。
+    
+    要求：
+    1. 提炼 3 个最重要的核心动态。
+    2. 语气专业、简洁。
+    3. 如果内容包含技术突破或发射任务，请重点标注。
+    4. 输出格式为 Markdown。
+    
+    --- 新闻内容 ---
+    {news_text}
+    """
 
-要求：
-1. 提炼 3 个最重要的核心动态。
-2. 语气专业、简洁。
-3. 如果内容包含技术突破或发射任务，请重点标注。
-4. 输出格式为 Markdown。
-
---- 新闻内容 ---
-{news_text}
-"""
-
-    # 配置 API
+    # --- 关键优化 1: 显式配置 Transport ---
+    # 在某些网络环境下（特别是使用代理时），GRPC 可能会失败。强制使用 REST 往往更稳定。
     try:
-        genai.configure(api_key=API_KEY)
-        model = genai.GenerativeModel(MODEL_NAME)
+        genai.configure(api_key=API_KEY, transport='rest')
     except Exception as e:
-        return f"配置 Gemini 失败: {e}"
+        print(f"配置 Gemini 失败: {e}")
+        return None
 
-    # --- 重试逻辑开始 ---
+    model = genai.GenerativeModel(MODEL_NAME)
+
+    # --- 关键优化 2: 修正重试延迟单位 ---
     max_retries = 3
-    base_delay = 1000  # 基础等待 100 秒
+    base_delay = 2  # 修改为 2 秒 (原先 1000 秒太久了)
     
     for attempt in range(max_retries):
         try:
-            # 调用生成接口
             response = model.generate_content(prompt)
             
-            # --- 新增代码：获取并格式化 Token 统计 ---
+            # 获取 Token 统计
             input_tokens = "未知"
-            # 检查 usage_metadata 是否存在 (部分旧版SDK或出错时可能没有)
             if hasattr(response, 'usage_metadata'):
-                # prompt_token_count 即为输入 token 数
                 input_tokens = response.usage_metadata.prompt_token_count
-                print(f"本次生成消耗输入 Token: {input_tokens}")
+                print(f"API 调用成功! 消耗输入 Token: {input_tokens}")
             
-            report_content = response.text
-            
-            # 将 Token 信息追加到 Markdown 报告末尾
-            footer = f"\n\n---\n*API 统计: 输入 Token 数: {input_tokens}*"
-            return report_content + footer
-            # -------------------------------------
+            return response.text + f"\n\n---\n*Model: {MODEL_NAME} | Input Tokens: {input_tokens}*"
             
         except Exception as e:
             error_str = str(e)
-            # 检查是否为 429 (Resource Exhausted) 或 503 (Service Unavailable)
-            if "429" in error_str or "503" in error_str:
+            print(f"第 {attempt + 1} 次调用失败。错误信息: {error_str}")
+            
+            # 检查是否值得重试 (429: Too Many Requests, 503: Service Unavailable)
+            # 也可以捕获 google_exceptions.ResourceExhausted
+            if "429" in error_str or "503" in error_str or "ResourceExhausted" in error_str:
                 if attempt < max_retries - 1:
-                    wait_time = base_delay * (2 ** attempt) # 指数退避: 100s, 200s, 400s
-                    print(f"API 繁忙 (429/503)，{wait_time} 秒后进行第 {attempt + 2} 次重试...")
+                    wait_time = base_delay * (2 ** attempt) # 2s, 4s, 8s...
+                    print(f"触发流控/服务繁忙，等待 {wait_time} 秒后重试...")
                     time.sleep(wait_time)
-                    continue
                 else:
-                    return "错误：API 调用过于频繁，重试多次后仍然失败。请检查配额或稍后再试。"
+                    return f"错误：重试 {max_retries} 次后仍然失败。可能是 API 配额耗尽或服务宕机。\n详细错误: {error_str}"
             elif "404" in error_str:
-                 return f"错误：模型 {MODEL_NAME} 未找到，请检查模型名称是否正确。"
+                 return f"错误：模型 {MODEL_NAME} 未找到。请检查代码中的 MODEL_NAME 是否正确 (例如 gemini-1.5-flash)。"
             else:
-                # 其他错误直接返回，不重试
-                return f"生成报告时发生错误: {e}"
-    # --- 重试逻辑结束 ---
+                # 其他错误（如 400 参数错误，403 权限错误）重试也没用，直接返回
+                return f"API 调用发生不可恢复错误: {error_str}"
     
-    return "未知错误。"
+    return "未知流程错误"
 
 def save_report(content):
-    """保存报告"""
+    if not content:
+        return
     today = datetime.date.today().isoformat()
-    # 确保目录存在
     os.makedirs("reports", exist_ok=True)
-    
     filename = f"reports/Starlink_Report_{today}.md"
     
     with open(filename, "w", encoding="utf-8") as f:
         f.write(content)
-    
     print(f"报告已保存至 {filename}")
-    
-    # 更新 README
-    try:
-        with open("README.md", "w", encoding="utf-8") as f:
-            f.write(f"# Starlink 每日追踪\n\n最新更新时间: {today}\n\n{content}")
-    except Exception as e:
-        print(f"更新 README 失败: {e}")
 
 def main():
-    try:
-        news = get_starlink_news()
-        if not news:
-            print("未找到相关新闻，跳过生成。")
-            return
-            
-        report = generate_report(news)
+    news = get_starlink_news()
+    report = generate_report(news)
+    if report:
         save_report(report)
-        
-    except Exception as e:
-        print(f"主程序发生严重错误: {e}")
-        exit(1)
+        print("流程结束。")
+    else:
+        print("生成失败，未保存报告。")
 
 if __name__ == "__main__":
     main()
-
-
