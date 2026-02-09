@@ -147,14 +147,12 @@ def send_email(content):
 
     # 1. 将 Markdown 转换为 HTML
     try:
-        # 扩展 markdown 转换能力，支持表格和围栏代码块等
         html_body = markdown.markdown(content, extensions=['tables', 'fenced_code'])
     except Exception as e:
         print(f"Markdown 转换失败，降级发送纯文本: {e}")
         html_body = f"<pre>{content}</pre>"
 
-    # 2. 构建美化的 HTML 模板 (CSS 样式)
-    # 这里的 CSS 使得邮件在 Outlook, Gmail, 手机端看起来都比较舒服
+    # 2. 构建美化的 HTML 模板 (修改了 font-family)
     html_content = f"""
     <!DOCTYPE html>
     <html>
@@ -162,14 +160,20 @@ def send_email(content):
         <meta charset="utf-8">
         <style>
             body {{
-                font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+                /* 关键修改：将微软雅黑放在第一位，并提供通用备选字体 */
+                font-family: "Microsoft YaHei", "微软雅黑", STHeiti, MingLiu, sans-serif;
                 line-height: 1.6;
                 color: #333;
                 max-width: 800px;
                 margin: 0 auto;
                 padding: 20px;
             }}
-            h1, h2, h3 {{ color: #2c3e50; border-bottom: 2px solid #eaeaea; padding-bottom: 10px; }}
+            h1, h2, h3 {{ 
+                font-family: "Microsoft YaHei", "微软雅黑", sans-serif;
+                color: #2c3e50; 
+                border-bottom: 2px solid #eaeaea; 
+                padding-bottom: 10px; 
+            }}
             a {{ color: #0066cc; text-decoration: none; font-weight: bold; }}
             a:hover {{ text-decoration: underline; }}
             ul {{ padding-left: 20px; }}
@@ -202,7 +206,7 @@ def send_email(content):
     </body>
     </html>
     """
-
+    
     today = datetime.date.today().isoformat()
     subject = f"Starlink 每日简报 - {today}"
     
@@ -244,3 +248,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+
