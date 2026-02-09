@@ -11,7 +11,7 @@ from duckduckgo_search import DDGS
 API_KEY = os.getenv("GEMINI_API_KEY")
 
 # 建议：优先使用稳定版模型
-MODEL_NAME = 'gemini-2.0-flash' 
+MODEL_NAME = 'gemini-2.5-flash' 
 # MODEL_NAME = 'gemini-1.5-flash'
 
 
@@ -160,3 +160,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+
