@@ -30,6 +30,7 @@ jobs:
     - name: Run analysis script
       env:
         GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+        MAIL_PASSWORD: ${{ secrets.MAIL_PASSWORD }}
       run: python main.py
 
     - name: Commit and Push changes
