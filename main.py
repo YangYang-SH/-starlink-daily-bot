@@ -43,9 +43,10 @@ def get_starlink_news():
                     date = r.get('date', '')
                     body = r.get('body', r.get('snippet', ''))
                     link = r.get('url', r.get('link', ''))
-                    
-                    if len(body) > 150:
-                        body = body[:150] + "..."
+
+                    # 长度原来是150， 修改为400
+                    if len(body) > 400:
+                        body = body[:400] + "..."
                     
                     clean_item = f"Date: {date}\nTitle: {title}\nLink: {link}\nSummary: {body}"
                     results.append(clean_item)
@@ -250,6 +251,7 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
 
 
