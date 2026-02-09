@@ -10,10 +10,9 @@ from duckduckgo_search import DDGS
 # 配置 Gemini API
 API_KEY = os.getenv("GEMINI_API_KEY")
 
-# 建议：优先使用稳定版模型，如果报错再尝试 2.0
-# MODEL_NAME = 'gemini-2.0-flash' 
+# 建议：优先使用稳定版模型
+MODEL_NAME = 'gemini-2.0-flash' 
 # MODEL_NAME = 'gemini-1.5-flash'
-MODEL_NAME = 'gemini-2.5-flash' 
 
 
 def get_starlink_news():
@@ -33,12 +32,16 @@ def get_starlink_news():
                     title = r.get('title', 'No Title')
                     date = r.get('date', '')
                     body = r.get('body', r.get('snippet', '')) 
+                    # 1. 提取 URL 链接
+                    link = r.get('url', r.get('link', '')) # <--- 修改点：获取链接
                     
                     if len(body) > 150:
                         body = body[:150] + "..."
                     
-                    clean_item = f"Date: {date}\nTitle: {title}\nSummary: {body}"
+                    # 2. 将链接包含在输入数据中，方便 AI 识别
+                    clean_item = f"Date: {date}\nTitle: {title}\nLink: {link}\nSummary: {body}" # <--- 修改点：加入 Link
                     results.append(clean_item)
+
             if results: # 只有找到结果才跳出
                 break 
         except Exception as e:
@@ -49,8 +52,9 @@ def get_starlink_news():
         return ""
 
     final_text = "\n---\n".join(results)
-    if len(final_text) > 3000:
-        final_text = final_text[:3000] + "\n...(内容已截断)"
+    # 稍微增加截断长度，因为加入了 URL
+    if len(final_text) > 4000:
+        final_text = final_text[:4000] + "\n...(内容已截断)"
     return final_text
 
 def generate_report(news_text):
@@ -63,32 +67,32 @@ def generate_report(news_text):
     if not news_text or len(news_text) < 10:
         return "未搜索到相关 Starlink 新闻。"
 
+    # 3. 修改 Prompt，要求输出链接
     prompt = f"""
 请扮演一位专业的科技新闻分析师。基于以下关于 Starlink (星链) 的最新新闻资讯，用中文写一份简短的日报。
 
 要求：
-1. 提炼 3 个最重要的核心动态。
+1. 提炼 5 个最重要的核心动态。
 2. 语气专业、简洁。
 3. 如果内容包含技术突破或发射任务，请重点标注。
-4. 输出格式为 Markdown。
+4. **必须在每条动态的结尾，附上对应的原始链接（格式为 Markdown：[点击查看原文](URL)）。**
+5. 输出格式为 Markdown。
 
 --- 新闻内容 ---
 {news_text}
-"""
+""" # <--- 修改点：增加了第 4 点要求
 
     # 配置 API
     try:
-        # 建议添加 transport='rest' 以提高在国内网络环境下的稳定性
+        # 建议添加 transport='rest' 以提高稳定性
         genai.configure(api_key=API_KEY, transport='rest')
         model = genai.GenerativeModel(MODEL_NAME)
     except Exception as e:
         return f"配置 Gemini 失败: {e}"
 
-    # --- 步骤 1: 预先计算 Token 数 (关键步骤) ---
+    # --- 步骤 1: 预先计算 Token 数 ---
     input_token_count = "未知"
     try:
-        # 这是一个专门计算 Token 的轻量级 API 调用
-        # 即使下面的生成失败了，我们也能知道这里有多少 Token
         count_result = model.count_tokens(prompt)
         input_token_count = count_result.total_tokens
         print(f"本次请求预计消耗输入 Token: {input_token_count}")
@@ -97,19 +101,16 @@ def generate_report(news_text):
 
     # --- 步骤 2: 带重试机制的生成逻辑 ---
     max_retries = 3
-    base_delay = 2  # 【重要修复】单位是秒！
+    base_delay = 2
     
     for attempt in range(max_retries):
         try:
             print(f"尝试第 {attempt + 1}/{max_retries} 次调用生成 API...")
             
-            # 调用生成接口
             response = model.generate_content(prompt)
             
-            # 如果成功，获取更准确的 Token 统计（包含输出 Token）
             output_tokens = "未知"
             if hasattr(response, 'usage_metadata'):
-                # 覆盖之前的预估值，使用服务端返回的准确值
                 input_token_count = response.usage_metadata.prompt_token_count
                 output_tokens = response.usage_metadata.candidates_token_count
             
@@ -123,18 +124,14 @@ def generate_report(news_text):
             error_str = str(e)
             print(f"尝试 {attempt + 1} 失败: {error_str}")
             
-            # 遇到 429 (限流) 或 503 (服务繁忙) 时重试
             if "429" in error_str or "503" in error_str:
                 if attempt < max_retries - 1:
-                    # 指数退避: 2s, 4s, 8s
                     wait_time = base_delay * (2 ** attempt) 
                     print(f"触发流控，等待 {wait_time} 秒后重试...")
                     time.sleep(wait_time)
                     continue
             
-            # 如果是最后一次尝试，或者遇到不可重试的错误（如 400, 403）
             if attempt == max_retries - 1:
-                # 【这里实现了你的需求】：在错误返回中包含 Token 数
                 return (f"错误：API 调用失败 (重试 {max_retries} 次)。\n"
                         f"涉及 Token 数: {input_token_count}\n"
                         f"最后一次报错信息: {error_str}")
@@ -163,5 +160,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
-
