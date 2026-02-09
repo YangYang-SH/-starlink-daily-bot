@@ -213,7 +213,8 @@ def send_email(content):
     # 3. 构造 MIMEText 对象，注意第二个参数改为 'html'
     message = MIMEText(html_content, 'html', 'utf-8')
     message['From'] = Header(MAIL_USER, 'utf-8')
-    message['To'] = Header(",".join(RECEIVERS), 'utf-8')
+    # message['To'] = Header(",".join(RECEIVERS), 'utf-8')
+    message['To'] = ", ".join(RECEIVERS)
     message['Subject'] = Header(subject, 'utf-8')
 
     try:
@@ -248,4 +249,5 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
