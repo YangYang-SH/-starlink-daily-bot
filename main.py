@@ -20,7 +20,7 @@ MAIL_HOST = "smtp.163.com"       # 163 邮箱 SMTP 服务器
 MAIL_USER = "zhangjiang201612@163.com" # 发件人邮箱
 # MAIL_PASS = "你的163授权码"      
 MAIL_PASS = os.getenv("MAIL_PASSWORD") # <--- 【重要】这里填你的 163 授权码，不是登录密码！
-RECEIVERS = ["pan.yangpan@huawei.com"，"taoxuetao@huawei.com"] # 收件人列表
+RECEIVERS = ["pan.yangpan@huawei.com","songjunlin@huawei.com"] # 收件人列表
 
 # 模型配置
 MODEL_NAME = 'gemini-2.5-flash' 
@@ -200,5 +200,6 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
 
