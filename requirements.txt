@@ -1,3 +1,4 @@
 google-generativeai
 duckduckgo-search
+markdown
 python-dotenv
