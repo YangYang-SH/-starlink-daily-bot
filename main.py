@@ -35,7 +35,7 @@ def get_starlink_news():
     for attempt in range(max_retries):
         try:
             with DDGS() as ddgs:
-                keywords = "SpaceX Starlink news latest technology D2C"
+                keywords = "SpaceX Starlink news latest Direct to Cell"
                 news_gen = ddgs.news(keywords, region="wt-wt", safesearch="off", timelimit="d", max_results=5)
                 
                 for r in news_gen:
@@ -250,6 +250,7 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
 
 
