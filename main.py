@@ -3,17 +3,29 @@
 import os
 import time
 import datetime
+import smtplib # 新增：用于发送邮件
+from email.mime.text import MIMEText # 新增：构建邮件内容
+from email.header import Header # 新增：构建邮件头
 import google.generativeai as genai
 from google.api_core import exceptions as google_exceptions
 from duckduckgo_search import DDGS
 
-# 配置 Gemini API
+# ================= 配置区域 =================
+
+# Gemini API Key
 API_KEY = os.getenv("GEMINI_API_KEY")
 
-# 建议：优先使用稳定版模型
-MODEL_NAME = 'gemini-2.5-flash' 
-# MODEL_NAME = 'gemini-1.5-flash'
+# 邮件配置
+MAIL_HOST = "smtp.163.com"       # 163 邮箱 SMTP 服务器
+MAIL_USER = "zhangjiang201612@163.com" # 发件人邮箱
+# MAIL_PASS = "你的163授权码"      
+MAIL_PASS = os.getenv("MAIL_PASSWORD") # <--- 【重要】这里填你的 163 授权码，不是登录密码！
+RECEIVERS = ["pan.yangpan@huawei.com", "songjunlin@huawei.com"] # 收件人列表
 
+# 模型配置
+MODEL_NAME = 'gemini-2.5-flash' 
+
+# ===========================================
 
 def get_starlink_news():
     """搜索 Starlink 最新新闻"""
@@ -25,24 +37,21 @@ def get_starlink_news():
         try:
             with DDGS() as ddgs:
                 keywords = "SpaceX Starlink news latest technology D2C"
-                # timelimit='d' 表示过去一天，确保新闻新鲜
                 news_gen = ddgs.news(keywords, region="wt-wt", safesearch="off", timelimit="d", max_results=5)
                 
                 for r in news_gen:
                     title = r.get('title', 'No Title')
                     date = r.get('date', '')
                     body = r.get('body', r.get('snippet', '')) 
-                    # 1. 提取 URL 链接
-                    link = r.get('url', r.get('link', '')) # <--- 修改点：获取链接
+                    link = r.get('url', r.get('link', ''))
                     
                     if len(body) > 150:
                         body = body[:150] + "..."
                     
-                    # 2. 将链接包含在输入数据中，方便 AI 识别
-                    clean_item = f"Date: {date}\nTitle: {title}\nLink: {link}\nSummary: {body}" # <--- 修改点：加入 Link
+                    clean_item = f"Date: {date}\nTitle: {title}\nLink: {link}\nSummary: {body}"
                     results.append(clean_item)
 
-            if results: # 只有找到结果才跳出
+            if results:
                 break 
         except Exception as e:
             print(f"DuckDuckGo 搜索尝试 {attempt + 1}/{max_retries} 失败: {e}")
@@ -52,13 +61,12 @@ def get_starlink_news():
         return ""
 
     final_text = "\n---\n".join(results)
-    # 稍微增加截断长度，因为加入了 URL
     if len(final_text) > 4000:
         final_text = final_text[:4000] + "\n...(内容已截断)"
     return final_text
 
 def generate_report(news_text):
-    """生成分析报告 (优化版：包含失败时的 Token 统计)"""
+    """生成分析报告"""
     if not API_KEY:
         return "错误：未配置 API Key，无法生成报告。"
 
@@ -67,7 +75,6 @@ def generate_report(news_text):
     if not news_text or len(news_text) < 10:
         return "未搜索到相关 Starlink 新闻。"
 
-    # 3. 修改 Prompt，要求输出链接
     prompt = f"""
 请扮演一位专业的科技新闻分析师。基于以下关于 Starlink (星链) 的最新新闻资讯，用中文写一份简短的日报。
 
@@ -80,41 +87,34 @@ def generate_report(news_text):
 
 --- 新闻内容 ---
 {news_text}
-""" # <--- 修改点：增加了第 4 点要求
+"""
 
-    # 配置 API
     try:
-        # 建议添加 transport='rest' 以提高稳定性
         genai.configure(api_key=API_KEY, transport='rest')
         model = genai.GenerativeModel(MODEL_NAME)
     except Exception as e:
         return f"配置 Gemini 失败: {e}"
 
-    # --- 步骤 1: 预先计算 Token 数 ---
+    # 预计算 Token (可选)
     input_token_count = "未知"
     try:
         count_result = model.count_tokens(prompt)
         input_token_count = count_result.total_tokens
-        print(f"本次请求预计消耗输入 Token: {input_token_count}")
-    except Exception as e:
-        print(f"警告: 预计算 Token 失败 ({e})，但不影响后续尝试生成。")
+    except:
+        pass
 
-    # --- 步骤 2: 带重试机制的生成逻辑 ---
     max_retries = 3
     base_delay = 2
     
     for attempt in range(max_retries):
         try:
             print(f"尝试第 {attempt + 1}/{max_retries} 次调用生成 API...")
-            
             response = model.generate_content(prompt)
             
             output_tokens = "未知"
             if hasattr(response, 'usage_metadata'):
                 input_token_count = response.usage_metadata.prompt_token_count
                 output_tokens = response.usage_metadata.candidates_token_count
-            
-            print(f"生成成功! 输入: {input_token_count}, 输出: {output_tokens}")
             
             report_content = response.text
             footer = f"\n\n---\n*API 统计: 输入 Token: {input_token_count} | 输出 Token: {output_tokens}*"
@@ -123,20 +123,14 @@ def generate_report(news_text):
         except Exception as e:
             error_str = str(e)
             print(f"尝试 {attempt + 1} 失败: {error_str}")
-            
             if "429" in error_str or "503" in error_str:
                 if attempt < max_retries - 1:
-                    wait_time = base_delay * (2 ** attempt) 
-                    print(f"触发流控，等待 {wait_time} 秒后重试...")
-                    time.sleep(wait_time)
+                    time.sleep(base_delay * (2 ** attempt))
                     continue
-            
             if attempt == max_retries - 1:
-                return (f"错误：API 调用失败 (重试 {max_retries} 次)。\n"
-                        f"涉及 Token 数: {input_token_count}\n"
-                        f"最后一次报错信息: {error_str}")
+                return f"错误：API 调用失败。\n最后报错: {error_str}"
 
-    return f"未知错误 (Token: {input_token_count})"
+    return "未知错误"
 
 def save_report(content):
     if not content:
@@ -149,16 +143,60 @@ def save_report(content):
         f.write(content)
     print(f"报告已保存至 {filename}")
 
+def send_email(content):
+    """发送邮件功能"""
+    print("正在准备发送邮件...")
+    
+    if not content or "错误" in content[:20]:
+        print("报告内容为空或包含错误，跳过发送。")
+        return
+
+    # 1. 构造邮件对象
+    today = datetime.date.today().isoformat()
+    subject = f"Starlink 每日简报 - {today}"
+    
+    # 使用 MIMEText 构造邮件内容，utf-8 编码
+    message = MIMEText(content, 'plain', 'utf-8')
+    message['From'] = Header(MAIL_USER, 'utf-8')
+    message['To'] =  Header(",".join(RECEIVERS), 'utf-8') # 邮件头显示所有收件人
+    message['Subject'] = Header(subject, 'utf-8')
+
+    try:
+        # 2. 连接 SMTP 服务器 (163 使用 SSL 端口 465)
+        smtp_obj = smtplib.SMTP_SSL(MAIL_HOST, 465) 
+        
+        # 3. 登录
+        smtp_obj.login(MAIL_USER, MAIL_PASS)
+        
+        # 4. 发送邮件
+        smtp_obj.sendmail(MAIL_USER, RECEIVERS, message.as_string())
+        print(f"邮件已成功发送至: {RECEIVERS}")
+        
+        # 5. 退出
+        smtp_obj.quit()
+        
+    except smtplib.SMTPException as e:
+        print(f"邮件发送失败 (SMTP错误): {e}")
+    except Exception as e:
+        print(f"邮件发送发生未知错误: {e}")
+
 def main():
+    # 1. 获取新闻
     news = get_starlink_news()
+    
+    # 2. 生成报告
     report = generate_report(news)
+    
     if report:
+        # 3. 本地保存
         save_report(report)
+        
+        # 4. 发送邮件 (新增)
+        send_email(report)
+        
         print("流程结束。")
     else:
-        print("生成失败，未保存报告。")
+        print("生成失败，未保存也未发送。")
 
 if __name__ == "__main__":
     main()
-
-
