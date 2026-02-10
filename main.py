@@ -20,7 +20,8 @@ MAIL_HOST = "smtp.163.com"
 MAIL_USER = "zhangjiang201612@163.com"
 MAIL_PASS = os.getenv("MAIL_PASSWORD") # 163 授权码
 # RECEIVERS = ["pan.yangpan@huawei.com", "songjunlin@huawei.com"]
-RECEIVERS = ["pan.yangpan@huawei.com"]
+RECEIVERS = ["pan.yangpan@huawei.com", "taoxuetao@huawei.com"]
+# RECEIVERS = ["pan.yangpan@huawei.com"]
 
 # 模型配置
 # MODEL_NAME = 'gemini-2.5-flash'
@@ -37,7 +38,7 @@ def get_starlink_news():
     for attempt in range(max_retries):
         try:
             with DDGS() as ddgs:
-                keywords = "SpaceX Starlink news latest Direct to Cell"
+                keywords = "SpaceX Starlink news latest Direct to Cell Commercial"
                 news_gen = ddgs.news(keywords, region="wt-wt", safesearch="off", timelimit="d", max_results=5)
                 
                 for r in news_gen:
@@ -79,11 +80,11 @@ def generate_report(news_text):
 
     # 提示词保持 Markdown 格式要求，因为 markdown 库处理这个最方便
     prompt = f"""
-请扮演一位专业的科技新闻分析师。结合自行搜索Starlink当天最新的信息和以下关于 Starlink (星链) 的最新新闻资讯，用中文写一份简短的日报。
+请扮演一位专业的科技新闻分析师。先自行搜索Starlink当天最新的信息，然后结合以下关于 Starlink (星链) 的最新新闻资讯，用中文写一份日报。
 
 要求：
 1. 提炼 5 个最重要的核心动态。
-2. 语气专业、简洁。
+2. 语气专业。
 3. 使用 Markdown 格式（使用 **加粗** 重点，使用 - 列表）。
 4. **必须在每条动态的结尾，附上对应的原始链接（格式为 Markdown：[点击查看原文](URL)）。**
 
@@ -253,6 +254,7 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
 
 
