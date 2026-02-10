@@ -19,10 +19,12 @@ API_KEY = os.getenv("GEMINI_API_KEY")
 MAIL_HOST = "smtp.163.com"
 MAIL_USER = "zhangjiang201612@163.com"
 MAIL_PASS = os.getenv("MAIL_PASSWORD") # 163 授权码
-RECEIVERS = ["pan.yangpan@huawei.com", "songjunlin@huawei.com"]
+# RECEIVERS = ["pan.yangpan@huawei.com", "songjunlin@huawei.com"]
+RECEIVERS = ["pan.yangpan@huawei.com"]
 
 # 模型配置
-MODEL_NAME = 'gemini-2.5-flash'
+# MODEL_NAME = 'gemini-2.5-flash'
+MODEL_NAME = 'gemini-3-flash-preview'
 
 # ===========================================
 
@@ -77,7 +79,7 @@ def generate_report(news_text):
 
     # 提示词保持 Markdown 格式要求，因为 markdown 库处理这个最方便
     prompt = f"""
-请扮演一位专业的科技新闻分析师。基于以下关于 Starlink (星链) 的最新新闻资讯，用中文写一份简短的日报。
+请扮演一位专业的科技新闻分析师。结合自行搜索Starlink当天最新的信息和以下关于 Starlink (星链) 的最新新闻资讯，用中文写一份简短的日报。
 
 要求：
 1. 提炼 5 个最重要的核心动态。
@@ -251,6 +253,7 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
 
 
