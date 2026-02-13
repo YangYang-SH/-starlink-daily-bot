@@ -21,14 +21,14 @@ MAIL_USER = "zhangjiang201612@163.com"
 MAIL_PASS = os.getenv("MAIL_PASSWORD") # 163 授权码
 # RECEIVERS = ["pan.yangpan@huawei.com", "songjunlin@huawei.com"]
 # RECEIVERS = ["pan.yangpan@huawei.com", "taoxuetao@huawei.com"]
-RECEIVERS = ["pan.yangpan@huawei.com"]
-# RECEIVERS = ["pan.yangpan@huawei.com", "taoxuetao@huawei.com", "songjunlin@huawei.com"]
+# RECEIVERS = ["pan.yangpan@huawei.com"]
+RECEIVERS = ["pan.yangpan@huawei.com", "taoxuetao@huawei.com", "songjunlin@huawei.com"]
 
 
 # 模型配置
 # MODEL_NAME = 'gemini-2.5-flash'
-# MODEL_NAME = 'gemini-3-flash-preview'
-MODEL_NAME = 'gemini-3-pro-preview'
+MODEL_NAME = 'gemini-3-flash-preview'
+# MODEL_NAME = 'gemini-3-pro-preview'
 
 # ===========================================
 
@@ -257,6 +257,7 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
 
 
