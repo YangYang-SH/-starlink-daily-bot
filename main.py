@@ -83,7 +83,7 @@ def generate_report(news_text):
 
     # 提示词保持 Markdown 格式要求，因为 markdown 库处理这个最方便
     prompt = f"""
-请扮演一位专业的科技新闻分析师。先自行搜索Starlink当天最新的信息，然后结合以下关于 Starlink (星链) 的最新新闻资讯，用中文写一份日报。
+请扮演一位专业的科技新闻分析师。先自行收集Starlink当天最新的信息，重点关注FCC关于Starlink的申请/征询/批准的信息，然后结合以下关于 Starlink (星链) 的最新新闻资讯，用中文写一份日报。
 
 要求：
 1. 提炼 5 个最重要的核心动态。
@@ -257,6 +257,7 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
 
 
