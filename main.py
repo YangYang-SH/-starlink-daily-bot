@@ -83,12 +83,12 @@ def generate_report(news_text):
 
     # 提示词保持 Markdown 格式要求，因为 markdown 库处理这个最方便
     prompt = f"""
-请扮演一位专业的科技新闻分析师。从如下3个方面用中文写一份日报。
+请扮演一位专业的科技新闻分析师。从如下3个方面收集信息，用中文写一份日报。
 1.  自行收集Starlink当天最新的信息，重点关注FCC关于Starlink或者SpaceX的申请/征询/批准的信息。
-2.  特别是Space Exploration在FCC提交的最新文档需要详细分析，提取关键信息。
+2.  自行收集和详细分析Space Exploration在FCC提交的最新文档的关键信息。
 3.  结合以下关于 Starlink (星链) 的最新新闻资讯。
 
-要求：
+日报要求：
 1. 提炼 5 个最重要的核心动态。
 2. 语气专业。
 3. 使用 Markdown 格式（使用 **加粗** 重点，使用 - 列表）。
@@ -260,6 +260,7 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
 
 
