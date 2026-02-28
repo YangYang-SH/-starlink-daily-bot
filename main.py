@@ -22,7 +22,7 @@ MAIL_PASS = os.getenv("MAIL_PASSWORD") # 163 授权码
 # RECEIVERS = ["pan.yangpan@huawei.com", "songjunlin@huawei.com"]
 # RECEIVERS = ["pan.yangpan@huawei.com", "taoxuetao@huawei.com"]
 # RECEIVERS = ["pan.yangpan@huawei.com"]
-RECEIVERS = ["pan.yangpan@huawei.com", "taoxuetao@huawei.com", "songjunlin@huawei.com"]
+RECEIVERS = ["pan.yangpan@huawei.com", "taoxuetao@huawei.com", "songjunlin@huawei.com", "lijiazi@huawei.com"]
 
 
 # 模型配置
@@ -260,6 +260,7 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
 
 
