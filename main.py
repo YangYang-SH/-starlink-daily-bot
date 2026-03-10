@@ -27,8 +27,8 @@ RECEIVERS = ["pan.yangpan@huawei.com", "taoxuetao@huawei.com", "songjunlin@huawe
 
 # 模型配置
 # MODEL_NAME = 'gemini-2.5-flash'
-MODEL_NAME = 'gemini-3-flash-preview'
-# MODEL_NAME = 'gemini-3-pro-preview'
+# MODEL_NAME = 'gemini-3-flash-preview'
+MODEL_NAME = 'gemini-3.1-pro-preview'
 
 # ===========================================
 
@@ -260,6 +260,7 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
 
 
