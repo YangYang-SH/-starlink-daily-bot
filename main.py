@@ -249,7 +249,7 @@ def main():
     
     if report:
         # 3. 本地保存 (依然保存 Markdown 源码，方便存档)
-        save_report(report)
+        # save_report(report)
         
         # 4. 发送邮件 (发送渲染后的 HTML)
         send_email(report)
@@ -260,6 +260,7 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
 
 
